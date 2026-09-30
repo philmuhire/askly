@@ -5,9 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.db.base import Base  # re-exported for convenience
 
 from dotenv import load_dotenv
+from app.core.config import settings
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
+DATABASE_URL = settings.database_url
 
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL is not set")

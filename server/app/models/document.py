@@ -1,4 +1,5 @@
-from sqlalchemy import Column, DateTime, String, Text, ForeignKey
+from datetime import datetime
+from sqlalchemy import Column, DateTime, Integer, String, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.base import Base
@@ -16,7 +17,7 @@ class Document(Base):
 
     system_id = Column(
         UUID(as_uuid=True),
-        ForeignKey("systems.id"),
+        ForeignKey("systems.id", ondelete="CASCADE"),
         nullable=True
     )
 
@@ -29,12 +30,14 @@ class Document(Base):
 
     version = Column(String)
     status = Column(String, default="processing")
+    page_count = Column(Integer, nullable=True)
+    chunk_count = Column(Integer, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now, nullable=False)
     updated_at = Column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow
+        default=datetime.now,
+        onupdate=datetime.now
     )
 
     organization = relationship(

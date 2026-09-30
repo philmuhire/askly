@@ -10,6 +10,8 @@ from pathlib import Path
 from app.api.v1.routes.users import users_router
 from app.api.v1.routes.auth import auth_router
 from app.api.v1.routes.organization import organization_router
+from app.api.v1.routes.documents import docs_router
+from app.api.v1.routes.system import system_router
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _SERVER_ROOT = Path(__file__).resolve().parent
@@ -52,6 +54,8 @@ app.add_middleware(
 app.include_router(users_router)
 app.include_router(auth_router)
 app.include_router(organization_router)
+app.include_router(docs_router)
+app.include_router(system_router)
 
 
 

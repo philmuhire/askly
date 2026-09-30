@@ -1,8 +1,9 @@
-from sqlalchemy import Column, DateTime, String, Text, ForeignKey
+from sqlalchemy import Column, Integer, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.db.base import Base
-
+from pgvector.sqlalchemy import Vector
+from sqlalchemy.dialects.postgresql import JSONB
 
 class DocumentChunk(Base):
     __tablename__ = "document_chunks"
@@ -28,6 +29,6 @@ class DocumentChunk(Base):
     #   "language": "en",
     #   "content_type": "procedure"
     # }
-    metadata = Column(JSONB)
-
+    chunk_metadata = Column(JSONB)
+    
     document = relationship("Document", back_populates="chunks")
