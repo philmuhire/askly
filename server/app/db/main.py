@@ -15,7 +15,7 @@ if not DATABASE_URL:
 
 engine = create_async_engine(DATABASE_URL)
 
-SessionLocal = async_sessionmaker(
+async_session = async_sessionmaker(
     bind=engine,
     class_=AsyncSession,
     autocommit=False,
@@ -25,5 +25,5 @@ SessionLocal = async_sessionmaker(
 
 
 async def get_db():
-    async with SessionLocal() as session:
+    async with async_session() as session:
         yield session

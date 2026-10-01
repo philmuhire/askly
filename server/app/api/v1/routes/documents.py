@@ -23,8 +23,8 @@ from app.services.document_storage import save_upload
 
 
 docs_router = APIRouter(
-    prefix="/knowledge-bases",
-    tags=["Knowledge Base"],
+    prefix="/systems",
+    tags=["Documents"],
 )
 
 
@@ -43,83 +43,57 @@ async def upload_document(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
 ):
-
-    # -----------------------------
-    # 1. Validate knowledge base
-    # -----------------------------
-
+    # 1. Get system
     result = await db.execute(
-        select(System).where(
-            System.id == system_id
-        )
+        select(System).where(System.id == system_id)
     )
 
-    sys_knowledge_base = result.scalar_one_or_none()
+    system = result.scalar_one_or_none()
 
-    if not sys_knowledge_base:
+    if not system:
         raise HTTPException(
             status_code=404,
-            detail="Knowledge base not found",
+            detail="System not found",
         )
 
-    # -----------------------------
     # 2. Validate file
-    # -----------------------------
-
     if file.content_type not in ALLOWED_TYPES:
-
         raise HTTPException(
             status_code=400,
             detail="Only PDF files are currently supported",
         )
 
-    # -----------------------------
-    # 3. Create document
-    # -----------------------------
-
+    # 3. Create document record
     document = Document(
-        organization_id=sys_knowledge_base.organization_id,
-        knowledge_base_id=sys_knowledge_base.id,
-        title=file.filename,
+        id=uuid.uuid4(),
+        organization_id=system.organization_id,
+        system_id=system.id,
+        name=file.filename,
         file_name=file.filename,
         file_type=file.content_type,
-        status="processing",
         storage_path="",
+        status="processing",
     )
 
     db.add(document)
 
+    # Generate document.id before storage
     await db.flush()
 
-    # -----------------------------
-    # 4. Save file
-    # -----------------------------
-
+    # 4. Save physical file
     storage_path = await save_upload(
         file=file,
-        organization_id=str(
-            sys_knowledge_base.organization_id
-        ),
-        system_id=str(
-            sys_knowledge_base.id
-        ),
-        document_id=str(
-            document.id
-        ),
+        organization_id=str(system.organization_id),
+        system_id=str(system.id),
+        document_id=str(document.id),
     )
 
     document.storage_path = storage_path
 
+    # 5. Persist document
     await db.commit()
 
-    # -----------------------------
-    # 5. Start ingestion
-    # -----------------------------
-
-    # MVP:
-    # BackgroundTasks should be used here.
-    #
-    # For now this illustrates the call.
+    # 6. Start ingestion
     background_tasks.add_task(
         ingest_document_background,
         document.id,
@@ -161,3 +135,32 @@ async def get_document(
         "chunks": document.chunk_count,
         "error": document.error_message,
     }
+
+@docs_router.get("/{system_id}/documents")
+async def get_documents_by_system(
+    system_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    # Verify system exists
+    result = await db.execute(
+        select(System).where(System.id == system_id)
+    )
+
+    system = result.scalar_one_or_none()
+
+    if not system:
+        raise HTTPException(
+            status_code=404,
+            detail="System not found",
+        )
+
+    # Get documents belonging to the system
+    result = await db.execute(
+        select(Document)
+        .where(Document.system_id == system_id)
+        .order_by(Document.created_at.desc())
+    )
+
+    documents = result.scalars().all()
+
+    return documents

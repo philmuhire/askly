@@ -32,8 +32,8 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="Cyber Compliance AI Engine",
-    description="Multi-agent governance API.",
+    title="Support Assistant Agent",
+    description="Support Assistant Agent API.",
     lifespan=lifespan,
 )
 

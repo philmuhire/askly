@@ -1,5 +1,4 @@
-# app/services/ingestion.py
-
+import uuid
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -92,6 +91,7 @@ async def ingest_document(
 
             db.add(
                 DocumentChunk(
+                    id=uuid.uuid4(),
                     document_id=document.id,
                     chunk_index=index,
                     content=chunk.content,
