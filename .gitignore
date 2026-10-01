@@ -64,3 +64,5 @@ migrations/
 dist/
 build/
 *.egg-info/
+
+server/storage/
