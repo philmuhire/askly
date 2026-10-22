@@ -1,27 +1,50 @@
-from app.services.retrieval import search_knowledge
-from app.db.main import get_db
-from agents import function_tool
+import logging
 
+from agents import RunContextWrapper, function_tool
+
+from app.agents.context import AgentContext
+from app.services.retrieval import search_knowledge
+
+logger = logging.getLogger(__name__)
+
+
+def _clean(text: str) -> str:
+    # Stop retrieved content from closing our <source> wrapper early.
+    return text.replace("</source", "<\\/source")
+
+
+def _attr(text: str) -> str:
+    return text.replace('"', "'").replace("\n", " ")[:200]
 
 
 @function_tool
-async def search_support_knowledge(
-    query: str,
-) -> str:
+async def search_knowledge_base(ctx: RunContextWrapper[AgentContext], query: str) -> str:
+    """Search the organization's internal IT documentation.
 
-    results = await search_knowledge(
-        db=get_db,
-        organization_id=current_user.organization_id,
-        query=query,
-        limit=5,
-    )
+    Call this before answering any question about IT systems, policies or
+    procedures. You may call it multiple times with different queries.
 
-    return "\n\n".join(
-        f"""
-Source: {document.title}
-Page: {chunk.page_number}
+    Args:
+        query: A specific, self-contained search query. Include product names,
+            error messages and key terms; resolve pronouns from the conversation.
+    """
+    app_ctx = ctx.context
+    try:
+        async with app_ctx.session_factory() as db:
+            chunks = await search_knowledge(db, app_ctx.organization_id, query)
+    except Exception:
+        logger.exception("knowledge search failed")
+        return "The documentation search is temporarily unavailable."
 
-{chunk.content}
-"""
-        for chunk, document, distance in results
-    )
+    if not chunks:
+        return "No relevant documentation found for this query."
+
+    blocks = []
+    for chunk in chunks:
+        src = app_ctx.register(chunk)
+        page = f' page="{src.page_number}"' if src.page_number is not None else ""
+        blocks.append(
+            f'<source id="{src.id}" title="{_attr(src.title)}"{page}>\n'
+            f"{_clean(src.content)}\n</source>"
+        )
+    return "\n\n".join(blocks)

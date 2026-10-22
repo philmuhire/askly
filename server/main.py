@@ -12,6 +12,7 @@ from app.api.v1.routes.auth import auth_router
 from app.api.v1.routes.organization import organization_router
 from app.api.v1.routes.documents import docs_router
 from app.api.v1.routes.system import system_router
+from app.api.v1.routes.chat import chat_router
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _SERVER_ROOT = Path(__file__).resolve().parent
@@ -56,6 +57,7 @@ app.include_router(auth_router)
 app.include_router(organization_router)
 app.include_router(docs_router)
 app.include_router(system_router)
+app.include_router(chat_router)
 
 
 
