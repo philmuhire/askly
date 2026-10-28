@@ -52,7 +52,7 @@ async def search_knowledge(
             DocumentChunk.document_id.label("document_id"),
             DocumentChunk.content.label("content"),
             DocumentChunk.page_number.label("page_number"),
-            Document.title.label("title"),
+            Document.name.label("name"),
             distance.label("distance"),
         )
         .join(Document, Document.id == DocumentChunk.document_id)
@@ -76,7 +76,7 @@ async def search_knowledge(
             RetrievedChunk(
                 chunk_id=row.chunk_id,
                 document_id=row.document_id,
-                document_title=row.title,
+                document_title=row.name,
                 content=row.content,
                 score=score,
                 page_number=row.page_number,
@@ -87,4 +87,5 @@ async def search_knowledge(
 
     logger.info("retrieval org=%s returned=%d top=%.3f", organization_id, len(results),
                 results[0].score if results else 0.0)
+    print(results)
     return results

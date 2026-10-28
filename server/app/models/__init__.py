@@ -5,3 +5,5 @@ from .refresh_token import RefreshToken
 from .system import System
 from .document import Document
 from .document_chunk import DocumentChunk
+from .conversation import Conversation
+from .message import Message

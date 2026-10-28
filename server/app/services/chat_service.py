@@ -9,8 +9,11 @@ from agents import RunConfig, Runner
 from agents.exceptions import MaxTurnsExceeded
 from fastapi import HTTPException
 from openai.types.responses import ResponseTextDeltaEvent
+from app.core.config import settings
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from openai import AsyncOpenAI
+
 
 from app.agents.context import AgentContext
 from app.agents.support_agent import support_agent
@@ -32,18 +35,48 @@ class Turn:
     history: list[dict[str, str]]
 
 
+client = AsyncOpenAI(
+    api_key=settings.openrouter_api_key,
+    base_url=settings.openrouter_base_url
+)
+
+async def generate_conversation_title(message: str) -> str:
+    response = await client.chat.completions.create(
+        model=settings.llm_model,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "Generate a concise title for a conversation based on "
+                    "the user's message. Use 3-8 words. "
+                    "Return only the title, without quotation marks."
+                ),
+            },
+            {
+                "role": "user",
+                "content": message,
+            },
+        ],
+        max_tokens=30,
+        temperature=0.3,
+    )
+
+    title = response.choices[0].message.content
+    return title.strip().strip('"') if title else "New conversation"
+
+
 def _strip_citations(text: str) -> str:
     """Source IDs are only valid within the turn that produced them."""
     return CITATION_RE.sub("", text).replace("  ", " ").strip()
 
 
-async def _owned_conversation(db: AsyncSession, user, conversation_id: uuid.UUID) -> Conversation:
+async def _owned_conversation(db: AsyncSession, user, conversation_id: uuid.UUID, organization_id: uuid.UUID) -> Conversation:
     """Fetch a conversation only if it belongs to this user and org; otherwise 404
     (404 rather than 403 so IDs of other tenants' conversations aren't confirmed)."""
     conv = await db.scalar(
         select(Conversation).where(
             Conversation.id == conversation_id,
-            Conversation.organization_id == user.organization_id,
+            Conversation.organization_id == organization_id,
             Conversation.user_id == user.id,
         )
     )
@@ -53,11 +86,11 @@ async def _owned_conversation(db: AsyncSession, user, conversation_id: uuid.UUID
 
 
 async def prepare_turn(
-    db: AsyncSession, user, message: str, conversation_id: uuid.UUID | None
+    db: AsyncSession, user, message: str, conversation_id: uuid.UUID | None, organization_id: uuid.UUID | None
 ) -> Turn:
     """Runs BEFORE streaming starts, so failures can still return proper HTTP codes."""
     if conversation_id:
-        conv = await _owned_conversation(db, user, conversation_id)
+        conv = await _owned_conversation(db, user, conversation_id, organization_id)
         rows = (
             await db.scalars(
                 select(Message)
@@ -70,8 +103,9 @@ async def prepare_turn(
             {"role": m.role, "content": _strip_citations(m.content)} for m in reversed(rows)
         ]
     else:
+        title = await generate_conversation_title(message)
         conv = Conversation(
-            organization_id=user.organization_id, user_id=user.id, title=message[:80]
+            organization_id=organization_id, user_id=user.id, title=title
         )
         db.add(conv)
         await db.flush()
@@ -103,11 +137,11 @@ def _cited_sources(answer: str, ctx: AgentContext) -> list[SourceRef]:
 
 
 async def run_turn(
-    turn: Turn, user, session_factory: async_sessionmaker[AsyncSession]
+    turn: Turn, user, organization_id, session_factory: async_sessionmaker[AsyncSession]
 ) -> AsyncIterator[tuple[str, dict]]:
     """Yields (event_name, payload): status | token | done | error."""
     ctx = AgentContext(
-        organization_id=user.organization_id,
+        organization_id=organization_id,
         user_id=user.id,
         session_factory=session_factory,
     )
@@ -173,14 +207,14 @@ async def run_turn(
 
 
 async def list_conversations(
-    db: AsyncSession, user, limit: int = 20, offset: int = 0
+    db: AsyncSession, user, organization_id, limit: int = 20, offset: int = 0
 ) -> list[Conversation]:
     return list(
         (
             await db.scalars(
                 select(Conversation)
                 .where(
-                    Conversation.organization_id == user.organization_id,
+                    Conversation.organization_id == organization_id,
                     Conversation.user_id == user.id,
                 )
                 .order_by(Conversation.updated_at.desc())
@@ -192,9 +226,9 @@ async def list_conversations(
 
 
 async def get_conversation(
-    db: AsyncSession, user, conversation_id: uuid.UUID
+    db: AsyncSession, user, conversation_id: uuid.UUID, organization_id: uuid.UUID
 ) -> ConversationDetail:
-    conv = await _owned_conversation(db, user, conversation_id)
+    conv = await _owned_conversation(db, user, conversation_id, organization_id)
     rows = (
         await db.scalars(
             select(Message)
@@ -211,8 +245,8 @@ async def get_conversation(
     )
 
 
-async def delete_conversation(db: AsyncSession, user, conversation_id: uuid.UUID) -> None:
-    conv = await _owned_conversation(db, user, conversation_id)
+async def delete_conversation(db: AsyncSession, user, conversation_id: uuid.UUID, organization_id: uuid.UUID) -> None:
+    conv = await _owned_conversation(db, user, conversation_id, organization_id)
     await db.execute(
         delete(Message).where(Message.conversation_id == conv.id)
     )

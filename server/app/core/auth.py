@@ -81,4 +81,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
     if not user:
         raise HTTPException(401, "User not found")
 
+    print('Current user')
+    print(user)
+
     return user

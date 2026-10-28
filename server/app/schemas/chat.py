@@ -9,6 +9,7 @@ class ChatRequest(BaseModel):
 
     message: str = Field(min_length=1, max_length=4000)
     conversation_id: UUID | None = None
+    organization_id: UUID | None = None
 
     @field_validator("message")
     @classmethod
